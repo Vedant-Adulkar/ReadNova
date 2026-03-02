@@ -1,0 +1,138 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Source+Sans+3:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 39 50% 96%;
+    --foreground: 25 30% 12%;
+
+    --card: 36 45% 93%;
+    --card-foreground: 25 30% 12%;
+
+    --popover: 39 50% 96%;
+    --popover-foreground: 25 30% 12%;
+
+    --primary: 30 75% 42%;
+    --primary-foreground: 39 50% 96%;
+
+    --secondary: 33 30% 85%;
+    --secondary-foreground: 25 30% 18%;
+
+    --muted: 36 25% 90%;
+    --muted-foreground: 25 15% 45%;
+
+    --accent: 25 60% 52%;
+    --accent-foreground: 39 50% 96%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 39 50% 96%;
+
+    --border: 33 25% 85%;
+    --input: 33 25% 85%;
+    --ring: 30 75% 42%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 36 40% 94%;
+    --sidebar-foreground: 25 30% 18%;
+    --sidebar-primary: 30 75% 42%;
+    --sidebar-primary-foreground: 39 50% 96%;
+    --sidebar-accent: 33 30% 88%;
+    --sidebar-accent-foreground: 25 30% 18%;
+    --sidebar-border: 33 25% 85%;
+    --sidebar-ring: 30 75% 42%;
+
+    --glass: 0 0% 100% / 0.7;
+    --glass-border: 0 0% 100% / 0.2;
+    --shadow-premium: 0 10px 30px -10px rgba(0, 0, 0, 0.1);
+
+    --warm-glow: 35 80% 55%;
+    --warm-brown: 25 35% 30%;
+    --cream: 39 50% 96%;
+    --parchment: 36 45% 93%;
+  }
+
+  .dark {
+    --background: 25 25% 10%;
+    --foreground: 36 30% 88%;
+
+    --card: 25 22% 14%;
+    --card-foreground: 36 30% 88%;
+
+    --popover: 25 22% 14%;
+    --popover-foreground: 36 30% 88%;
+
+    --primary: 35 80% 55%;
+    --primary-foreground: 25 25% 10%;
+
+    --secondary: 25 18% 20%;
+    --secondary-foreground: 36 30% 85%;
+
+    --muted: 25 15% 18%;
+    --muted-foreground: 30 15% 55%;
+
+    --accent: 30 65% 50%;
+    --accent-foreground: 25 25% 10%;
+
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 36 30% 88%;
+
+    --border: 25 15% 20%;
+    --input: 25 15% 20%;
+    --ring: 35 80% 55%;
+
+    --sidebar-background: 25 22% 12%;
+    --sidebar-foreground: 36 30% 85%;
+    --sidebar-primary: 35 80% 55%;
+    --sidebar-primary-foreground: 25 25% 10%;
+    --sidebar-accent: 25 18% 18%;
+    --sidebar-accent-foreground: 36 30% 85%;
+    --sidebar-border: 25 15% 20%;
+    --sidebar-ring: 35 80% 55%;
+
+    --glass: 25 25% 10% / 0.7;
+    --glass-border: 25 25% 100% / 0.1;
+    --shadow-premium: 0 10px 30px -10px rgba(0, 0, 0, 0.4);
+
+    --warm-glow: 35 80% 55%;
+    --warm-brown: 30 20% 55%;
+    --cream: 36 15% 85%;
+    --parchment: 25 22% 14%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased selection:bg-primary/20;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-serif tracking-tight;
+  }
+
+  .glass-card {
+    @apply bg-[hsl(var(--glass))] backdrop-blur-md border border-[hsl(var(--glass-border))] shadow-premium;
+  }
+
+  .premium-shadow {
+    @apply shadow-premium;
+  }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/20 rounded-full hover:bg-muted-foreground/40 transition-colors;
+  }
+}

@@ -98,7 +98,7 @@ const safeGeminiCall = async (prompt) => {
   }
 
   try {
-    const model = getClient().getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = getClient().getGenerativeModel({ model: "gemini-2.0-flash" });
 
     // ── 2. Timeout race ──────────────────────────────────
     const timeoutPromise = new Promise((_, reject) =>

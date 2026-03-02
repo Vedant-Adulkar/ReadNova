@@ -14,7 +14,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const Book = require("../models/Book");
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-const EMBEDDING_MODEL = "text-embedding-004";   // 768-dimensional output
+const EMBEDDING_MODEL = "embedding-001";   // 768-dimensional output
 const BATCH_SIZE = 20;                           // Books per batch (API rate limit)
 const BATCH_DELAY_MS = 1200;                     // Delay between batches (ms)
 const TIMEOUT_MS = 8000;                         // Per-call hard timeout

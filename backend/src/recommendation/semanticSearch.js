@@ -10,33 +10,38 @@ const cosineSimilarity = require("../utils/cosineSimilarity");
 /**
  * semanticSearch
  *
- * Ranks all candidate books by cosine similarity to a query embedding.
- * Books with empty embeddings are assigned a score of 0 and fall to the bottom.
+ * Ranks candidate books by cosine similarity to a query embedding and
+ * returns only those that clear a minimum relevance threshold.
+ * Books with empty embeddings are assigned a score of 0.
  *
- * @param {number[]} queryEmbedding   - Dense vector from embedText(query)
- * @param {object[]} books            - Array of Book documents (must have .embedding)
- * @param {number}   [topN=10]        - Maximum number of results to return
- * @returns {Array<{ book: object, score: number }>}  Sorted descending by score
+ * With Google Gemini embeddings (gemini-embedding-001, 768-dim) cosine
+ * similarity is typically 0.3–0.6 even between unrelated texts, so a
+ * default threshold of 0.50 is used to suppress noise results.
+ *
+ * @param {number[]} queryEmbedding        - Dense vector from embedText(query)
+ * @param {object[]} books                 - Array of Book documents (must have .embedding)
+ * @param {number}   [topN=10]             - Maximum number of results to return
+ * @param {number}   [threshold=0.50]      - Minimum cosine similarity score to include
+ * @returns {Array<{ book: object, score: number }>}  Sorted descending; empty if nothing clears threshold
  */
-const semanticSearch = (queryEmbedding, books, topN = 10) => {
+const semanticSearch = (queryEmbedding, books, topN = 10, threshold = 0.50) => {
   if (!queryEmbedding || queryEmbedding.length === 0) {
-    // No embedding available — return books with zero scores (caller should fallback)
-    return books.slice(0, topN).map((book) => ({ book, score: 0 }));
+    // No embedding available — return empty so caller falls back
+    return [];
   }
 
   const scored = books.map((book) => {
     const bookEmbedding = book.embedding || [];
-    // Skip cosine calculation for books without embeddings
     const score =
       bookEmbedding.length > 0
         ? cosineSimilarity(queryEmbedding, bookEmbedding)
         : 0;
-
     return { book, score };
   });
 
-  // Sort descending by similarity score, then slice to topN
+  // Filter by threshold FIRST, then sort and slice
   return scored
+    .filter((r) => r.score >= threshold)
     .sort((a, b) => b.score - a.score)
     .slice(0, topN);
 };

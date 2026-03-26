@@ -2,6 +2,8 @@
 const asyncHandler = require("../utils/asyncHandler");
 const adminService = require("../services/adminService");
 const bookService = require("../services/bookService");
+const Book = require("../models/Book");
+const { embedText, buildBookText } = require("../services/embeddingService");
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────
 // @desc   Get admin dashboard stats
@@ -81,4 +83,49 @@ exports.generateEmbeddings = asyncHandler(async (req, res) => {
     message: `Book embedding generation complete.`,
     ...stats,
   });
+});
+
+// ─── Embed Missing Books ───────────────────────────────────────────────────────
+// @desc   Background-embed all books that currently have no embedding vector
+// @route  POST /api/admin/embed-missing
+// @access Admin
+exports.embedMissingBooks = asyncHandler(async (req, res) => {
+  const unembedded = await Book.find({
+    $or: [
+      { embedding: { $exists: false } },
+      { embedding: { $size: 0 } },
+      { embedding: null },
+    ],
+  }).lean();
+
+  // Respond immediately — the actual work runs in the background
+  res.json({
+    success: true,
+    message: `Embedding ${unembedded.length} books in the background...`,
+    count: unembedded.length,
+  });
+
+  // Fire-and-forget embedding loop
+  (async () => {
+    let success = 0;
+    let failed = 0;
+    for (const bookDoc of unembedded) {
+      try {
+        const text = buildBookText(bookDoc);
+        const vector = await embedText(text);
+        if (vector.length > 0) {
+          await Book.findByIdAndUpdate(bookDoc._id, { embedding: vector });
+          success += 1;
+          console.log(`  ✅ [embed-missing] "${bookDoc.title}"`);
+        } else {
+          failed += 1;
+          console.warn(`  ⚠️  [embed-missing] Empty vector for "${bookDoc.title}"`);
+        }
+      } catch (err) {
+        failed += 1;
+        console.error(`  ❌ [embed-missing] "${bookDoc.title}":`, err.message);
+      }
+    }
+    console.log(`\n✨ [embed-missing] Done — success: ${success}, failed: ${failed}`);
+  })();
 });

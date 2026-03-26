@@ -60,6 +60,28 @@ const bookSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    // Age-based content gating
+    contentRating: {
+      type: String,
+      enum: {
+        values: ["General", "Teen", "Mature"],
+        message: "contentRating must be General, Teen, or Mature",
+      },
+      default: "General",
+    },
+    // Google Books volume ID — set when a Google Books result is saved locally
+    googleBooksId: {
+      type: String,
+      default: null,
+      index: true,
+      sparse: true,   // only index docs where this field is set
+    },
+    // Track where this book record originated
+    source: {
+      type: String,
+      enum: ["manual", "google_books", "admin"],
+      default: "manual",
+    },
   },
   { timestamps: true }
 );
@@ -73,5 +95,8 @@ bookSchema.index({ genres: 1 });
 bookSchema.index({ difficultyLevel: 1 });
 bookSchema.index({ averageRating: -1 });
 bookSchema.index({ createdAt: -1 });
+bookSchema.index({ contentRating: 1 });
+// Sparse index to efficiently find books that still need embedding
+bookSchema.index({ "embedding.0": 1 });
 
 module.exports = mongoose.model("Book", bookSchema);

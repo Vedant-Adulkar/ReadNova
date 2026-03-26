@@ -79,8 +79,14 @@ export function AuthProvider({ children }) {
     setUser((prev) => ({ ...prev, ...updates }));
   }, []);
 
+  // ── updateProfilePicture — optimistic avatar update (no refetch) ───────────
+  // Call this immediately after a successful /api/upload/profile response.
+  const updateProfilePicture = useCallback((url) => {
+    setUser((prev) => ({ ...prev, profilePicture: url }));
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, logout, updateUser, updateProfilePicture }}>
       {children}
     </AuthContext.Provider>
   );

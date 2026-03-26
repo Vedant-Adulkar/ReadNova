@@ -24,6 +24,7 @@ const reviewRoutes = require("./src/routes/reviewRoutes");
 const recommendationRoutes = require("./src/routes/recommendationRoutes");
 const readingGoalRoutes = require("./src/routes/readingGoalRoutes");
 const adminRoutes = require("./src/routes/adminRoutes");
+const uploadRoutes = require("./src/routes/uploadRoutes");
 
 // ── Connect to MongoDB ─────────────────────────────────────────────────────────
 connectDB();
@@ -75,6 +76,7 @@ app.use("/api/reviews", reviewRoutes);
 app.use("/api/recommendations", recommendationRoutes);
 app.use("/api/reading-goal", readingGoalRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/upload", uploadRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {

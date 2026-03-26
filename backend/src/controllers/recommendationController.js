@@ -4,22 +4,27 @@ const recommendationService = require("../services/recommendationService");
 const gemini = require("../ai/geminiService");
 
 // @desc   Get personalised book recommendations
-// @route  GET /api/recommendations
+// @route  GET /api/recommendations?mood=Happy  OR  ?query=short mystery&topN=10
 // @access Protected
-// Query:  ?query=short beginner mystery&topN=10
+// ── Mood takes priority over query — they are mutually exclusive ─────────────
 exports.getRecommendations = asyncHandler(async (req, res) => {
-  const { query = "", topN = 10 } = req.query;
+  const { mood, query, topN = 10 } = req.query;
+
+  // Build a clean input object: mood OR query, never both
+  const input = {};
+  if (mood) {
+    input.mood = mood;
+  } else if (query) {
+    input.query = query;
+  }
+  input.topN = Math.min(parseInt(topN, 10) || 10, 50); // hard cap at 50
 
   try {
-    const results = await recommendationService.getRecommendations(req.user, {
-      query,
-      topN: Math.min(parseInt(topN, 10) || 10, 50), // Hard cap at 50
-    });
-
+    const results = await recommendationService.getRecommendations(req.user, input);
     res.json({ success: true, count: results.length, recommendations: results });
   } catch (error) {
-    console.error("DEBUG: Recommendation error -", error.message);
-    res.status(500).json({ success: false, message: error.message });
+    const status = error.statusCode || 500;
+    res.status(status).json({ success: false, message: error.message });
   }
 });
 

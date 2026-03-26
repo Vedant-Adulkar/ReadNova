@@ -1,0 +1,213 @@
+{
+  "info": {
+    "name": "ReadNova API",
+    "description": "AI-Powered Social Book Recommendation Platform — Complete API collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000/api", "type": "string" },
+    { "key": "token",   "value": "",                            "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/auth/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"name\":\"Vedant\",\"email\":\"vedant@example.com\",\"password\":\"password123\",\"age\":21}" }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.collectionVariables.set('token', pm.response.json().token);"] } }],
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"email\":\"vedant@example.com\",\"password\":\"password123\"}" }
+          }
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET", "url": "{{baseUrl}}/auth/me",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Save Quiz Preferences",
+          "request": {
+            "method": "PUT", "url": "{{baseUrl}}/auth/preferences",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"embedding\":[0.1,0.2,0.3],\"personalityProfile\":\"Genres: Mystery, Sci-Fi. Difficulty: Intermediate.\"}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Books",
+      "item": [
+        {
+          "name": "List Books",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/books?page=1&limit=10", "query": [{"key":"page","value":"1"},{"key":"limit","value":"10"}] } }
+        },
+        {
+          "name": "Search Books (text)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/books?q=gatsby&difficulty=Intermediate", "query": [{"key":"q","value":"gatsby"},{"key":"difficulty","value":"Intermediate"}] } }
+        },
+        {
+          "name": "Get Book by ID",
+          "request": { "method": "GET", "url": "{{baseUrl}}/books/BOOK_ID_HERE" }
+        },
+        {
+          "name": "AI Book Summary",
+          "request": { "method": "GET", "url": "{{baseUrl}}/books/BOOK_ID_HERE/summary" }
+        },
+        {
+          "name": "AI Review Sentiment",
+          "request": { "method": "GET", "url": "{{baseUrl}}/books/BOOK_ID_HERE/review-summary" }
+        },
+        {
+          "name": "Google Books Search",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/books/google-search?q=harry+potter&limit=10", "query": [{"key":"q","value":"harry potter"},{"key":"limit","value":"10"}] } }
+        },
+        {
+          "name": "Semantic Search",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/books/semantic-search?q=dark+atmospheric+mystery&topN=5", "query": [{"key":"q","value":"dark atmospheric mystery"},{"key":"topN","value":"5"}] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Recommendations",
+      "item": [
+        {
+          "name": "Get Recommendations (Mood)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/recommendations?mood=Happy&topN=10", "query": [{"key":"mood","value":"Happy"},{"key":"topN","value":"10"}] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Get Recommendations (Conversational)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/recommendations?query=short beginner mystery&topN=10", "query": [{"key":"query","value":"short beginner mystery"},{"key":"topN","value":"10"}] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Get AI Explanation for Book",
+          "request": {
+            "method": "GET", "url": "{{baseUrl}}/recommendations/BOOK_ID_HERE/explain",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "AI Health (Circuit Breaker)",
+          "request": {
+            "method": "GET", "url": "{{baseUrl}}/recommendations/ai-health",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Bookshelf",
+      "item": [
+        {
+          "name": "Get My Bookshelf",
+          "request": {
+            "method": "GET", "url": "{{baseUrl}}/bookshelf",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Add Book to Shelf",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/bookshelf",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"bookId\":\"BOOK_ID_HERE\"}" }
+          }
+        },
+        {
+          "name": "Move to Next Shelf",
+          "request": {
+            "method": "PATCH", "url": "{{baseUrl}}/bookshelf/move",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"bookId\":\"BOOK_ID_HERE\",\"fromShelf\":\"wantToRead\",\"toShelf\":\"reading\"}" }
+          }
+        },
+        {
+          "name": "Remove from Shelf",
+          "request": {
+            "method": "DELETE", "url": "{{baseUrl}}/bookshelf/BOOK_ID_HERE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reviews",
+      "item": [
+        {
+          "name": "Create Review",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/reviews",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"bookId\":\"BOOK_ID_HERE\",\"rating\":5,\"reviewText\":\"An absolute masterpiece. Highly recommended for any reader.\"}" }
+          }
+        },
+        {
+          "name": "Get Reviews for Book",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/reviews/book/BOOK_ID_HERE?page=1&limit=10", "query": [{"key":"page","value":"1"},{"key":"limit","value":"10"}] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reading Goals",
+      "item": [
+        {
+          "name": "Set Yearly Goal",
+          "request": {
+            "method": "PUT", "url": "{{baseUrl}}/reading-goal",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"yearly\":24}" }
+          }
+        },
+        {
+          "name": "Get Goal Progress",
+          "request": {
+            "method": "GET", "url": "{{baseUrl}}/reading-goal/progress",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Upload",
+      "item": [
+        {
+          "name": "Upload Profile Picture",
+          "request": {
+            "method": "POST", "url": "{{baseUrl}}/upload/profile",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [{ "key": "avatar", "type": "file", "description": "Profile picture (max 2MB, image/* only)" }]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

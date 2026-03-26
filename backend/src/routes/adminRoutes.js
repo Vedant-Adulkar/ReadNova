@@ -47,4 +47,8 @@ router.delete("/reviews/:reviewId", adminController.deleteReview);
 // Query: ?overwrite=true  (optional, re-embeds already-embedded books)
 router.post("/generate-embeddings", adminController.generateEmbeddings);
 
+// POST   /api/admin/embed-missing
+// Embeds only books that currently have an empty embedding array (fire-and-forget)
+router.post("/embed-missing", adminController.embedMissingBooks);
+
 module.exports = router;

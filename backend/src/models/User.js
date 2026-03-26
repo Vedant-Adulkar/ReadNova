@@ -63,12 +63,15 @@ const userSchema = new mongoose.Schema(
       yearly: { type: Number, default: 0, min: 0 },
       year: { type: Number, default: new Date().getFullYear() },
     },
+    // Cloudinary-hosted profile picture
+    profilePicture: { type: String, default: "" },
+    profilePicturePublicId: { type: String, default: "" },
   },
   { timestamps: true }
 );
 
 // ── Indexes ────────────────────────────────────────────────
-userSchema.index({ email: 1 }, { unique: true });
+// email uniqueness is enforced by the `unique: true` on the field above (no need for a separate index call)
 
 // ── Pre-save: hash password only when it is new or modified ─
 userSchema.pre("save", async function (next) {

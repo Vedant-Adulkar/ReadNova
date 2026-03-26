@@ -317,6 +317,10 @@ export default function SemanticSearchPage() {
                     <Badge className="bg-violet-500/20 text-violet-300 border-violet-500/30 gap-1.5">
                       <Brain className="w-3 h-3" /> Semantic Match
                     </Badge>
+                  ) : searchType === "google_books" ? (
+                    <Badge className="bg-blue-500/20 text-blue-300 border-blue-500/30 gap-1.5">
+                      <Sparkles className="w-3 h-3" /> Google Books
+                    </Badge>
                   ) : searchType === "text" ? (
                     <Badge variant="outline" className="gap-1.5 text-muted-foreground">
                       <Search className="w-3 h-3" /> Text Fallback

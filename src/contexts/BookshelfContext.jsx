@@ -36,9 +36,18 @@ export function BookshelfProvider({ children }) {
   // ── getStatus — returns 'want' | 'reading' | 'completed' | null ───────────
   const getStatus = useCallback((bookId) => {
     const id = String(bookId);
-    if (bookshelf.wantToRead?.some((e) => String(e.book?._id ?? e.book) === id)) return "want";
-    if (bookshelf.reading?.some((e) => String(e.book?._id ?? e.book) === id)) return "reading";
-    if (bookshelf.completed?.some((e) => String(e.book?._id ?? e.book) === id)) return "completed";
+    // A book added from Google Books is stored in MongoDB with a new _id,
+    // but its googleBooksId field retains the original volume ID.
+    // We must match against BOTH so shelf state stays in sync.
+    const matches = (e) => {
+      const book = e.book;
+      const mongoId = String(book?._id ?? book);
+      const gBookId = book?.googleBooksId ? String(book.googleBooksId) : null;
+      return mongoId === id || gBookId === id;
+    };
+    if (bookshelf.wantToRead?.some(matches)) return "want";
+    if (bookshelf.reading?.some(matches)) return "reading";
+    if (bookshelf.completed?.some(matches)) return "completed";
     return null;
   }, [bookshelf]);
 
@@ -75,12 +84,12 @@ export function BookshelfProvider({ children }) {
   }, [getStatus]);
 
   // ── entries — flat array matching old BookshelfContext shape ──────────────
-  // (keeps BookCard and Bookshelf.jsx working without big rewrites)
   const entries = [
-    ...(bookshelf.wantToRead || []).map((e) => ({ bookId: String(e.book?._id ?? e.book), status: "want", book: e.book, addedAt: e.addedAt })),
-    ...(bookshelf.reading || []).map((e) => ({ bookId: String(e.book?._id ?? e.book), status: "reading", book: e.book, addedAt: e.addedAt })),
-    ...(bookshelf.completed || []).map((e) => ({ bookId: String(e.book?._id ?? e.book), status: "completed", book: e.book, addedAt: e.addedAt })),
+    ...(bookshelf.wantToRead || []).map((e) => ({ bookId: String(e.book?._id ?? e.book), googleBooksId: e.book?.googleBooksId ?? null, status: "want", book: e.book, addedAt: e.addedAt })),
+    ...(bookshelf.reading || []).map((e) => ({ bookId: String(e.book?._id ?? e.book), googleBooksId: e.book?.googleBooksId ?? null, status: "reading", book: e.book, addedAt: e.addedAt })),
+    ...(bookshelf.completed || []).map((e) => ({ bookId: String(e.book?._id ?? e.book), googleBooksId: e.book?.googleBooksId ?? null, status: "completed", book: e.book, addedAt: e.addedAt })),
   ];
+
 
   return (
     <BookshelfContext.Provider value={{ bookshelf, entries, loadingShelf, getStatus, setBookStatus }}>

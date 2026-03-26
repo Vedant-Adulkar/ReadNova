@@ -41,15 +41,42 @@ export default function Dashboard() {
       .finally(() => setLoadingTrending(false));
   }, []);
 
-  // ── For You = Google Books curated picks (always Google Books) ─────────────
+  // ── For You = personalised from quiz preferences ─────────────────────────
   useEffect(() => {
     if (!user) return;
     setLoadingRecs(true);
-    get("/books/google-search", { q: "must read award winning classic novels", limit: 12 })
+
+    // Build a targeted query from the user's saved personalityProfile
+    const profile = user.personalityProfile || "";
+    let q = "must read award winning books";
+
+    if (profile) {
+      // Extract genres: "Genres: Fiction, Sci-Fi."
+      const genreMatch = profile.match(/Genres:\s*([^.]+)/);
+      const genres = genreMatch
+        ? genreMatch[1].split(",").map((g) => g.trim()).filter(Boolean)
+        : [];
+
+      // Extract difficulty: "Difficulty: Beginner — Easy, light reads."
+      const diffMatch = profile.match(/Difficulty:\s*([^.]+)/);
+      const difficulty = diffMatch ? diffMatch[1].trim() : "";
+
+      // Build query: top 3 genres + difficulty hint
+      const topGenres = genres.slice(0, 3).join(" ");
+      const diffHint = difficulty.startsWith("Beginner")
+        ? "beginner easy introductory"
+        : difficulty.startsWith("Advanced")
+          ? "advanced comprehensive"
+          : "";
+
+      q = [topGenres, diffHint, "books"].filter(Boolean).join(" ").trim() || q;
+    }
+
+    get("/books/google-search", { q, limit: 12 })
       .then((data) => setRecommendations(data.books || []))
       .catch(console.error)
       .finally(() => setLoadingRecs(false));
-  }, [user]);
+  }, [user?.personalityProfile]);
 
   // ── Mood chips → Google Books search ──────────────────────────────────────
   useEffect(() => {
@@ -154,20 +181,39 @@ export default function Dashboard() {
         )}
 
         {/* For You / Mood / Trending */}
-        {!query && (
-          <>
-            <Section title={selectedMood ? `Based on Your Mood: ${selectedMood}` : "For You"}>
-              {loadingRecs
-                ? <Loader2 className="animate-spin h-6 w-6 text-primary" />
-                : <BookGrid books={recommendations.map(normaliseBook)} showExplanation />}
-            </Section>
-            <Section title="Trending Now">
-              {loadingTrending
-                ? <Loader2 className="animate-spin h-6 w-6 text-primary" />
-                : <BookGrid books={trending.map(normaliseBook)} />}
-            </Section>
-          </>
-        )}
+        {!query && (() => {
+          // Derive a short label from the profile for the section title
+          const profile = user?.personalityProfile || "";
+          const genreMatch = profile.match(/Genres:\s*([^.]+)/);
+          const topGenres = genreMatch
+            ? genreMatch[1].split(",").slice(0, 2).map((g) => g.trim()).join(" & ")
+            : null;
+
+          const forYouTitle = selectedMood
+            ? `Based on Your Mood: ${selectedMood}`
+            : topGenres
+              ? `For You · ${topGenres}`
+              : "For You";
+
+          const forYouSubtitle = !profile
+            ? "Take the quiz to personalise your recommendations →"
+            : null;
+
+          return (
+            <>
+              <Section title={forYouTitle} subtitle={forYouSubtitle}>
+                {loadingRecs
+                  ? <Loader2 className="animate-spin h-6 w-6 text-primary" />
+                  : <BookGrid books={recommendations.map(normaliseBook)} showExplanation />}
+              </Section>
+              <Section title="Trending Now">
+                {loadingTrending
+                  ? <Loader2 className="animate-spin h-6 w-6 text-primary" />
+                  : <BookGrid books={trending.map(normaliseBook)} />}
+              </Section>
+            </>
+          );
+        })()}
       </div>
     </AppLayout>
   );

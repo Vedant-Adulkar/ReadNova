@@ -11,12 +11,12 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: MONGODB_URI
+      - key: MONGO_URI
         sync: false
       - key: JWT_SECRET
         sync: false
-      - key: JWT_EXPIRE
-        value: 30d
+      - key: JWT_EXPIRES_IN
+        value: 7d
       - key: GEMINI_API_KEY
         sync: false
       - key: GOOGLE_BOOKS_API_KEY
@@ -32,4 +32,12 @@ services:
       - key: PINECONE_API_KEY
         sync: false
       - key: PINECONE_INDEX_NAME
-        value: books-index
+        value: book-index
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
+        value: meta-llama/llama-3.3-70b-instruct:free
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.1-8b-instant

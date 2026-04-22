@@ -1,7 +1,19 @@
 // backend/src/services/bookService.js
+const crypto = require("crypto");
 const Book = require("../models/Book");
 const cloudinary = require("../config/cloudinary");
 const paginate = require("../utils/paginate");
+const gemini = require("../ai/geminiService");
+
+// ── Stale lock threshold (5 minutes) ──────────────────────────────────────────
+const LOCK_TIMEOUT_MS = 5 * 60 * 1000;
+
+// ── Dedup hash: MD5 of normalised title + author ──────────────────────────────
+const makeSummaryHash = (title, author) =>
+  crypto
+    .createHash("md5")
+    .update(`${(title || "").toLowerCase().trim()}::${(author || "").toLowerCase().trim()}`)
+    .digest("hex");
 
 /**
  * createBook — admin-only book creation.
@@ -141,4 +153,187 @@ const uploadCoverImage = (buffer, bookId) => {
   });
 };
 
-module.exports = { createBook, getBooks, getBookById, updateBook, deleteBook, uploadCoverImage };
+module.exports = { createBook, getBooks, getBookById, updateBook, deleteBook, uploadCoverImage, getOrGenerateSummary, clearStaleSummaryLocks, makeSummaryHash };
+
+// ────────────────────────────────────────────────────────────────────────────
+// Lazy AI Summary Generation (Caching Pipeline)
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * getOrGenerateSummary — returns a cached AI summary if available,
+ * otherwise generates one via Gemini, persists it, and triggers a re-embed.
+ *
+ * Concurrency-safe via atomic findOneAndUpdate lock.
+ * Dedup-safe via summaryHash (MD5 of title+author).
+ * Stale-safe via 5-minute lock timeout.
+ *
+ * @param {string} bookId
+ * @returns {Promise<object|null>}  aiSummary object or null on failure
+ */
+async function getOrGenerateSummary(bookId) {
+  // ── 1. Fetch book and check cache ───────────────────────────────────────
+  const book = await Book.findById(bookId).lean();
+  if (!book) return null;
+
+  const currentVersion = gemini.SUMMARY_PROMPT_VERSION;
+
+  // Cache hit: summary exists AND matches current prompt version
+  if (
+    book.aiSummary?.short &&
+    book.summaryVersion === currentVersion
+  ) {
+    return book.aiSummary;
+  }
+
+  // ── 2. Dedup check: another book with same title+author already has summary
+  const hash = makeSummaryHash(book.title, book.author);
+  if (hash) {
+    const existing = await Book.findOne({
+      _id: { $ne: bookId },
+      summaryHash: hash,
+      summaryVersion: currentVersion,
+      "aiSummary.short": { $ne: "" },
+    }).lean();
+
+    if (existing?.aiSummary?.short) {
+      // Copy summary from duplicate
+      await Book.findByIdAndUpdate(bookId, {
+        aiSummary: existing.aiSummary,
+        summaryVersion: currentVersion,
+        summaryHash: hash,
+        summaryGeneratedAt: existing.summaryGeneratedAt,
+        isSummarizing: false,
+      });
+      console.log(`📋 Dedup: copied summary from "${existing.title}" → "${book.title}"`);
+      return existing.aiSummary;
+    }
+  }
+
+  // ── 3. Atomic lock acquisition ──────────────────────────────────────────
+  // Only one process can lock at a time. Stale locks (>5 min) are overridden.
+  const now = new Date();
+  const staleThreshold = new Date(Date.now() - LOCK_TIMEOUT_MS);
+
+  const locked = await Book.findOneAndUpdate(
+    {
+      _id: bookId,
+      $or: [
+        { isSummarizing: { $ne: true } },
+        { isSummarizing: { $exists: false } },
+        // Override stale locks: summaryGeneratedAt is used as lock timestamp
+        { summaryGeneratedAt: { $lt: staleThreshold } },
+        { summaryGeneratedAt: { $exists: false } },
+        { summaryGeneratedAt: null },
+      ],
+    },
+    {
+      $set: { isSummarizing: true, summaryGeneratedAt: now },
+    },
+    { new: true }
+  );
+
+  if (!locked) {
+    // Another request already holds the lock — return null (caller shows "generating...")
+    console.log(`🔒 summary lock held for "${book.title}" — skipping.`);
+    return null;
+  }
+
+  // ── 4. Generate summary via Gemini ──────────────────────────────────────
+  try {
+    const summary = await gemini.generateBookSummary(book);
+
+    if (!summary || !summary.short) {
+      // Generation failed — release lock
+      await Book.findByIdAndUpdate(bookId, { isSummarizing: false });
+      console.warn(`⚠️ Summary generation failed for "${book.title}"`);
+      return null;
+    }
+
+    // ── 5. Persist summary + update tracking fields ─────────────────────
+    await Book.findByIdAndUpdate(bookId, {
+      aiSummary: summary,
+      summaryVersion: currentVersion,
+      summaryHash: hash,
+      summaryGeneratedAt: new Date(),
+      isSummarizing: false,
+    });
+    console.log(`✅ Generated + cached summary for "${book.title}" [${currentVersion}]`);
+
+    // ── 6. Mandatory re-embed (fire-and-forget) ─────────────────────────
+    // Import lazily to avoid circular dependency
+    setImmediate(async () => {
+      try {
+        const { embedText, buildBookText, buildPineconeMetadata } = require("./embeddingService");
+        const { getIndex, isPineconeConfigured } = require("./pineconeClient");
+
+        const updatedBook = await Book.findById(bookId).lean();
+        if (!updatedBook) return;
+
+        const text = buildBookText(updatedBook);
+        const embedding = await embedText(text);
+
+        if (embedding.length > 0) {
+          await Book.findByIdAndUpdate(bookId, {
+            embedding,
+            embeddingStatus: "done",
+            embeddingVersion: "v3",
+          });
+          console.log(`🔄 Re-embedded "${updatedBook.title}" with AI summary data.`);
+
+          // Upsert to Pinecone if configured
+          if (isPineconeConfigured()) {
+            try {
+              await getIndex().upsert({
+                records: [{
+                  id: bookId.toString(),
+                  values: embedding,
+                  metadata: buildPineconeMetadata(updatedBook),
+                }],
+              });
+              console.log(`📍 Pinecone upserted for "${updatedBook.title}".`);
+            } catch (err) {
+              console.warn(`⚠️ Pinecone upsert failed for "${updatedBook.title}":`, err.message);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`⚠️ Re-embed failed for bookId=${bookId}:`, err.message);
+      }
+    });
+
+    return summary;
+  } catch (err) {
+    // Release lock on any error
+    await Book.findByIdAndUpdate(bookId, { isSummarizing: false }).catch(() => { });
+    console.error(`❌ getOrGenerateSummary error for "${book.title}":`, err.message);
+    return null;
+  }
+}
+
+/**
+ * clearStaleSummaryLocks — clears isSummarizing flags that got stuck
+ * (e.g., server crash mid-generation). Called on server startup.
+ *
+ * @returns {Promise<number>}  Number of stale locks cleared
+ */
+async function clearStaleSummaryLocks() {
+  const staleThreshold = new Date(Date.now() - LOCK_TIMEOUT_MS);
+
+  const result = await Book.updateMany(
+    {
+      isSummarizing: true,
+      $or: [
+        { summaryGeneratedAt: { $lt: staleThreshold } },
+        { summaryGeneratedAt: { $exists: false } },
+        { summaryGeneratedAt: null },
+      ],
+    },
+    { $set: { isSummarizing: false } }
+  );
+
+  const cleared = result.modifiedCount || 0;
+  if (cleared > 0) {
+    console.log(`🔓 Cleared ${cleared} stale summary lock(s) on startup.`);
+  }
+  return cleared;
+}

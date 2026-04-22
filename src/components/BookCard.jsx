@@ -20,8 +20,16 @@ export function BookCard({ book, showExplanation = false }) {
             className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
             loading="lazy"
             onError={(e) => {
-              e.target.onerror = null;
-              e.target.src = `https://covers.openlibrary.org/b/title/${encodeURIComponent(book.title || "book")}-M.jpg`;
+              const img = e.target;
+              const title = book.title || "book";
+              // Try Open Library first, then letter avatar as last resort
+              if (!img.dataset.fallback) {
+                img.dataset.fallback = "1";
+                img.src = `https://covers.openlibrary.org/b/title/${encodeURIComponent(title)}-M.jpg`;
+              } else {
+                img.onerror = null;
+                img.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(title)}&size=400&background=6d28d9&color=fff&bold=true&format=svg`;
+              }
             }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex flex-col justify-end p-4">
@@ -39,7 +47,7 @@ export function BookCard({ book, showExplanation = false }) {
             <h3 className="font-serif font-bold text-sm leading-tight line-clamp-1 group-hover:text-primary transition-colors">
               {book.title}
             </h3>
-            <p className="text-[11px] font-medium text-muted-foreground/80">{book.author}</p>
+            <p className="text-[11px] font-medium text-muted-foreground/80 line-clamp-1">{book.author}</p>
           </div>
 
           <div className="flex items-center justify-between">

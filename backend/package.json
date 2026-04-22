@@ -9,7 +9,11 @@
     "lint": "eslint src/ --ext .js",
     "test": "jest --testPathPatterns=src/tests --forceExit --runInBand",
     "embed": "node scripts/embedAllBooks.js",
-    "embed:overwrite": "node scripts/embedAllBooks.js --overwrite"
+    "embed:overwrite": "node scripts/embedAllBooks.js --overwrite",
+    "seed": "node scripts/seedAndEmbed.js",
+    "seed:force": "node scripts/seedAndEmbed.js --force",
+    "summarize": "node scripts/generateSummaries.js",
+    "summarize:force": "node scripts/generateSummaries.js --force"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
@@ -26,7 +30,10 @@
     "mongoose": "^8.6.0",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
-    "multer-storage-cloudinary": "^4.0.0"
+    "multer-storage-cloudinary": "^4.0.0",
+    "p-limit": "^3.1.0",
+    "pino": "^10.3.1",
+    "pino-pretty": "^13.1.3"
   },
   "devDependencies": {
     "eslint": "^8.57.0",

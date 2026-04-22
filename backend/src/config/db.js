@@ -17,6 +17,14 @@ const connectDB = async (attempt = 1) => {
 
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
 
+    // ── Startup housekeeping: clear stale summary locks ─────────────────
+    try {
+      const { clearStaleSummaryLocks } = require("../services/bookService");
+      await clearStaleSummaryLocks();
+    } catch (err) {
+      console.warn("⚠️  Could not clear stale summary locks:", err.message);
+    }
+
     // Graceful handling of runtime disconnects
     mongoose.connection.on("disconnected", () => {
       console.warn("⚠  MongoDB disconnected. Attempting to reconnect...");

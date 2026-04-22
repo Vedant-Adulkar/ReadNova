@@ -23,14 +23,14 @@ const globalLimiter = rateLimit({
 /**
  * authLimiter — applied to /api/auth routes.
  * Prevents brute-force login & registration attacks.
- * 10 requests per 15 minutes per IP.
+ * 15 requests per 2 minutes per IP.
  */
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
+  windowMs: 2 * 60 * 1000,
+  max: 15,
   standardHeaders: true,
   legacyHeaders: false,
-  message: rateLimitMessage(15),
+  message: rateLimitMessage(2),
   skipSuccessfulRequests: false,
 });
 

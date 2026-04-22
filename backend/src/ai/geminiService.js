@@ -23,7 +23,7 @@ const getClient = () => {
 // ────────────────────────────────────────────────────────────────────────────
 // Configuration
 // ────────────────────────────────────────────────────────────────────────────
-const TIMEOUT_MS = 5000;           // Max ms to wait for a Gemini response
+const TIMEOUT_MS = 5000;           // Default max ms to wait for a Gemini response
 const FAILURE_THRESHOLD = 5;      // Consecutive failures before opening circuit
 const RECOVERY_TIME_MS = 5 * 60 * 1000; // 5 minutes in OPEN state before retry
 
@@ -81,16 +81,18 @@ const recordFailure = () => {
 /**
  * safeGeminiCall — wraps any Gemini generateContent call with:
  *  1. Circuit-breaker check
- *  2. 5-second hard timeout via Promise.race()
+ *  2. Hard timeout via Promise.race() — override with timeoutMs param
  *  3. Quota / rate-limit detection (HTTP 429)
  *  4. Generic error catch-all
  *
  * Returns the raw response text string, or null on any failure.
  *
  * @param {string} prompt
+ * @param {object} [opts]
+ * @param {number} [opts.timeoutMs]   Override the default 5s timeout per call
  * @returns {Promise<string|null>}
  */
-const safeGeminiCall = async (prompt) => {
+const safeGeminiCall = async (prompt, { timeoutMs = TIMEOUT_MS } = {}) => {
   // ── 1. Circuit-breaker guard ───────────────────────────
   if (isBreakerOpen()) {
     console.warn("⚡ Circuit open — skipping Gemini call, using fallback.");
@@ -102,7 +104,7 @@ const safeGeminiCall = async (prompt) => {
 
     // ── 2. Timeout race ──────────────────────────────────
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("GEMINI_TIMEOUT")), TIMEOUT_MS)
+      setTimeout(() => reject(new Error("GEMINI_TIMEOUT")), timeoutMs)
     );
 
     const result = await Promise.race([
@@ -116,7 +118,7 @@ const safeGeminiCall = async (prompt) => {
   } catch (error) {
     // ── Timeout ──────────────────────────────────────────
     if (error.message === "GEMINI_TIMEOUT") {
-      console.warn("⏱  Gemini request timed out after 5s.");
+      console.warn(`⏱  Gemini request timed out after ${timeoutMs}ms.`);
       recordFailure();
       return null;
     }
@@ -259,35 +261,31 @@ common praise, and any recurring criticisms. Plain text only.
   return response || FALLBACK;
 };
 
+// ────────────────────────────────────────────────────────────────────────────
+// Book Summary — delegates to multi-provider fallbackService
+// ────────────────────────────────────────────────────────────────────────────
+const fallbackService = require("./fallbackService");
+
+// Re-export the prompt version from fallbackService (single source of truth)
+exports.SUMMARY_PROMPT_VERSION = fallbackService.SUMMARY_PROMPT_VERSION;
+
 /**
  * generateBookSummary
- * Produces a simplified, accessible summary of a book from its metadata.
+ * Produces a structured, semantically-rich summary of a book using the
+ * multi-provider fallback chain: Gemini → OpenRouter → Groq.
  *
  * @param {{ title: string, author: string, description: string, genres: string[], difficultyLevel: string }} bookMeta
- * @returns {string}
+ * @returns {Promise<{ short, detailed, themes, tone, audience, keywords }|null>}
  */
-exports.generateBookSummary = async (bookMeta) => {
-  // Fallback: truncate the raw description
-  const FALLBACK = (bookMeta.description || "").slice(0, 300) ||
-    `${bookMeta.title} by ${bookMeta.author}`;
-
-  const prompt = `
-Simplify the following book description into 2–3 easy-to-read sentences
-suitable for a general audience. Avoid jargon.
-
-Book: "${bookMeta.title}" by ${bookMeta.author}
-Genres: ${(bookMeta.genres || []).join(", ")}
-Description: ${(bookMeta.description || "").slice(0, 1000)}
-
-Plain text only.
-`;
-
-  const response = await safeGeminiCall(prompt);
-  return response || FALLBACK;
-};
+exports.generateBookSummary = (bookMeta) => fallbackService.generateBookSummary(bookMeta);
 
 /**
- * getBreakerStatus — exposes circuit-breaker state for health-check endpoints.
+ * getBreakerStatus — exposes Gemini circuit-breaker state for health-check endpoints.
  * @returns {{ state: string, failures: number, lastFailureTime: number|null }}
  */
 exports.getBreakerStatus = () => ({ ...breaker });
+
+/**
+ * getProviderStatus — exposes all AI provider configuration status.
+ */
+exports.getProviderStatus = () => fallbackService.getProviderStatus();

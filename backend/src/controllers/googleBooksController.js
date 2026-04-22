@@ -1,5 +1,6 @@
 // backend/src/controllers/googleBooksController.js
 const asyncHandler = require("../utils/asyncHandler");
+const Book = require("../models/Book");
 const { searchGoogleBooks, getGoogleBookById } = require("../services/googleBooksService");
 
 /**
@@ -47,5 +48,7 @@ exports.searchGoogleBooks = asyncHandler(async (req, res) => {
 exports.getGoogleBookById = asyncHandler(async (req, res) => {
   const { volumeId } = req.params;
   const book = await getGoogleBookById(volumeId);
-  return res.json({ success: true, book });
+  const local = await Book.findOne({ googleBooksId: volumeId }).select("_id").lean();
+  const mongoId = local?._id?.toString() ?? null;
+  return res.json({ success: true, book: { ...book, mongoId } });
 });

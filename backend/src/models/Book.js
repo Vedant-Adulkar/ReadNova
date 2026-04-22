@@ -40,6 +40,49 @@ const bookSchema = new mongoose.Schema(
       type: [Number],
       default: [],
     },
+    // Lifecycle status of the embedding: tracks success/failure for retry
+    embeddingStatus: {
+      type: String,
+      enum: ["none", "pending", "done", "failed"],
+      default: "none",
+    },
+    // Embedding version — increment when embedding strategy changes (e.g. v1 → v2)
+    // Useful for targeted re-seeding without touching correctly-versioned books
+    embeddingVersion: {
+      type: String,
+      default: "v1",
+    },
+    // ── AI-generated structured summary (lazy cached, generated once per book)
+    aiSummary: {
+      short:        { type: String, default: "" },
+      detailed:     { type: String, default: "" },
+      themes:       { type: [String], default: [] },
+      tone:         { type: String, default: "" },
+      audience:     { type: String, default: "" },
+      keywords:     { type: [String], default: [] },
+    },
+    // Version tag for the summary prompt — bump when prompt changes (e.g. "v1" → "v2")
+    summaryVersion: {
+      type: String,
+      default: "",
+    },
+    // When the AI summary was last generated
+    summaryGeneratedAt: {
+      type: Date,
+      default: null,
+    },
+    // DB-level lock: prevents race condition when two requests try to generate
+    // the same summary concurrently. Set to true before Gemini call, cleared after.
+    isSummarizing: {
+      type: Boolean,
+      default: false,
+    },
+    // MD5 hash of (title + author) — dedup key to prevent duplicate Gemini calls
+    summaryHash: {
+      type: String,
+      default: "",
+      index: true,
+    },
     averageRating: {
       type: Number,
       default: 0,
@@ -98,5 +141,14 @@ bookSchema.index({ createdAt: -1 });
 bookSchema.index({ contentRating: 1 });
 // Sparse index to efficiently find books that still need embedding
 bookSchema.index({ "embedding.0": 1 });
+// Index on embeddingStatus to efficiently query for failed/pending books
+bookSchema.index({ embeddingStatus: 1 });
+// Index on embeddingVersion to target stale embeddings during re-seeding
+bookSchema.index({ embeddingVersion: 1 });
+// Index on summaryVersion to quickly find books needing re-summarisation
+bookSchema.index({ summaryVersion: 1 });
+// Index on isSummarizing to help clean up stalled locks on restart
+bookSchema.index({ isSummarizing: 1 });
+// summaryHash index is defined via { index: true } on the field itself
 
 module.exports = mongoose.model("Book", bookSchema);

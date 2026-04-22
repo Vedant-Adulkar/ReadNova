@@ -9,7 +9,9 @@
 //   6. Returns top-N ranked results (cached for mood queries)
 
 const Joi = require("joi");
+const mongoose = require("mongoose");
 const Book = require("../models/Book");
+const { resolveBookMongoId } = require("./reviewService");
 const { getHybridRecommendations } = require("../recommendation/hybridEngine");
 const gemini = require("../ai/geminiService");
 const { getCache, setCache } = require("../utils/cache");
@@ -124,16 +126,41 @@ const getRecommendations = async (user, options = {}) => {
  * @param {string} bookId
  */
 const getExplanation = async (user, bookId) => {
-  const book = await Book.findById(bookId).lean();
+  let book;
+  const mongoId = await resolveBookMongoId(bookId);
+
+  if (mongoId) {
+    book = await Book.findById(mongoId).lean();
+  }
+
+  // Fallback for unimported Google Books results
+  if (!book && !mongoose.Types.ObjectId.isValid(bookId)) {
+    const { getGoogleBookById } = require("./googleBooksService");
+    try {
+      book = await getGoogleBookById(bookId);
+    } catch {
+      book = null;
+    }
+  }
+
   if (!book) {
     const error = new Error("Book not found");
     error.statusCode = 404;
     throw error;
   }
 
+  // ── 3. Populate genres from completed books ─────────────────────────────
+  const populatedUser = await user.populate("bookshelf.completed.book", "genres");
+  const completedGenres = [
+    ...new Set(
+      (populatedUser.bookshelf?.completed || [])
+        .flatMap((item) => item.book?.genres || [])
+    ),
+  ];
+
   const userProfile = {
     personalityProfile: user.personalityProfile,
-    completedGenres: (user.bookshelf?.completed || []).flatMap(() => []),
+    completedGenres,
   };
 
   const explanation = await gemini.generateExplanation(userProfile, book);

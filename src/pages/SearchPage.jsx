@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AppLayout } from "@/components/AppLayout";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ const DIFFICULTIES = ["Beginner", "Intermediate", "Advanced"];
 export default function SearchPage() {
   const [searchParams] = useSearchParams();
   const [query, setQuery] = useState(searchParams.get("q") || "");
+  const [debouncedQuery, setDebouncedQuery] = useState(query);
   const [selectedGenre, setSelectedGenre] = useState("all");
   const [difficulty, setDifficulty] = useState("all");
   const [sortBy, setSortBy] = useState("relevance");
@@ -22,8 +23,27 @@ export default function SearchPage() {
   const [genres, setGenres] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const debounceRef = useRef(null);
 
-  // ── Fetch distinct genres from first page of books for the filter dropdown ──
+  // ── Sync from URL params (navbar search) — triggers immediate search ───────
+  useEffect(() => {
+    const urlQuery = searchParams.get("q") || "";
+    if (urlQuery) {
+      setQuery(urlQuery);
+      setDebouncedQuery(urlQuery); // immediate, no debounce
+    }
+  }, [searchParams]);
+
+  // ── Debounce typed input (500ms delay) ─────────────────────────────────────
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedQuery(query);
+    }, 500);
+    return () => clearTimeout(debounceRef.current);
+  }, [query]);
+
+  // ── Fetch genres for filter dropdown ───────────────────────────────────────
   useEffect(() => {
     get("/books", { limit: 100 })
       .then((data) => {
@@ -33,48 +53,65 @@ export default function SearchPage() {
       .catch(console.error);
   }, []);
 
-  const search = useCallback(async () => {
-    setLoading(true);
-    try {
-      if (query.trim()) {
-        // ── Live search via Google Books API ─────────────────────────────────
-        const params = { q: query.trim(), limit: 40 };
-        if (selectedGenre !== "all") params.q += ` subject:${selectedGenre}`;
-        if (difficulty !== "all") params.difficulty = difficulty;
+  // ── Main search effect — runs when debounced query or filters change ───────
+  useEffect(() => {
+    let cancelled = false;
 
-        const data = await get("/books/google-search", params);
-        let results = data.books || [];
+    const runSearch = async () => {
+      setLoading(true);
+      try {
+        const trimmed = debouncedQuery.trim();
+        if (trimmed) {
+          // ── Try Google Books API first ────────────────────────────────────
+          const params = { q: trimmed, limit: 40 };
+          if (selectedGenre !== "all") params.q += ` subject:${selectedGenre}`;
+          if (difficulty !== "all") params.difficulty = difficulty;
 
-        // Client-side sort
-        if (sortBy === "rating") results = [...results].sort((a, b) => b.averageRating - a.averageRating);
-        else if (sortBy === "title") results = [...results].sort((a, b) => a.title.localeCompare(b.title));
+          let results = [];
+          try {
+            const data = await get("/books/google-search", params);
+            results = data.books || [];
+          } catch (err) {
+            console.warn("Google Books unavailable, falling back to local DB:", err.message);
+          }
 
-        setBooks(results);
-        setTotal(data.total || results.length);
-      } else {
-        // ── Browse local DB when no query ────────────────────────────────────
-        const params = { limit: 48 };
-        if (selectedGenre !== "all") params.genre = selectedGenre;
-        if (difficulty !== "all") params.difficulty = difficulty;
+          // ── Fallback to local DB if Google returned nothing ────────────────
+          if (results.length === 0) {
+            const localParams = { q: trimmed, limit: 48 };
+            if (selectedGenre !== "all") localParams.genre = selectedGenre;
+            if (difficulty !== "all") localParams.difficulty = difficulty;
+            const localData = await get("/books", localParams);
+            results = localData.books || [];
+          }
 
-        const data = await get("/books", params);
-        let results = data.books || [];
+          if (sortBy === "rating") results = [...results].sort((a, b) => b.averageRating - a.averageRating);
+          else if (sortBy === "title") results = [...results].sort((a, b) => a.title.localeCompare(b.title));
 
-        if (sortBy === "rating") results = [...results].sort((a, b) => b.averageRating - a.averageRating);
-        else if (sortBy === "title") results = [...results].sort((a, b) => a.title.localeCompare(b.title));
+          if (!cancelled) { setBooks(results); setTotal(results.length); }
+        } else {
+          // ── Browse local DB when no query ──────────────────────────────────
+          const params = { limit: 48 };
+          if (selectedGenre !== "all") params.genre = selectedGenre;
+          if (difficulty !== "all") params.difficulty = difficulty;
 
-        setBooks(results);
-        setTotal(data.total || results.length);
+          const data = await get("/books", params);
+          let results = data.books || [];
+
+          if (sortBy === "rating") results = [...results].sort((a, b) => b.averageRating - a.averageRating);
+          else if (sortBy === "title") results = [...results].sort((a, b) => a.title.localeCompare(b.title));
+
+          if (!cancelled) { setBooks(results); setTotal(data.total || results.length); }
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [query, selectedGenre, difficulty, sortBy]);
+    };
 
-  // Re-search whenever filters change
-  useEffect(() => { search(); }, [search]);
+    runSearch();
+    return () => { cancelled = true; };
+  }, [debouncedQuery, selectedGenre, difficulty, sortBy]);
 
   const normaliseBook = (b) => ({
     // Support both local MongoDB (_id) and Google Books (googleBooksId / id)

@@ -31,8 +31,10 @@ const SkeletonCard = () => (
 );
 
 // ─── Similarity Badge ─────────────────────────────────────────────────────────
+const isSemanticSearchType = (t) => t === "semantic" || t === "semantic_pinecone" || t === "blended";
+
 const SimilarityBadge = ({ percent, searchType }) => {
-  if (searchType !== "semantic" || percent == null) return null;
+  if (!isSemanticSearchType(searchType) || percent == null) return null;
   const color =
     percent >= 70 ? "text-emerald-400 border-emerald-500/40 bg-emerald-500/10"
       : percent >= 45 ? "text-blue-400 border-blue-500/40 bg-blue-500/10"
@@ -72,7 +74,16 @@ const SemanticBookCard = ({ result, searchType }) => {
           alt={book.title}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           onError={(e) => {
-            e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(book.title)}&size=400&background=6d28d9&color=fff&bold=true&format=svg`;
+            const img = e.target;
+            const title = book.title || "book";
+            // Try Open Library first, then letter avatar as last resort
+            if (!img.dataset.fallback) {
+              img.dataset.fallback = "1";
+              img.src = `https://covers.openlibrary.org/b/title/${encodeURIComponent(title)}-M.jpg`;
+            } else {
+              img.onerror = null;
+              img.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(title)}&size=400&background=6d28d9&color=fff&bold=true&format=svg`;
+            }
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
@@ -103,6 +114,22 @@ const SemanticBookCard = ({ result, searchType }) => {
             </div>
           )}
         </div>
+
+        {/* Source Label */}
+        {book.source && (
+          <div className={cn(
+            "absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full border text-[9px] font-bold backdrop-blur-md",
+            book.source === "semantic"
+              ? "text-violet-300 border-violet-500/40 bg-violet-500/10"
+              : "text-blue-300 border-blue-500/40 bg-blue-500/10"
+          )}>
+            {book.source === "semantic" ? (
+              <><Brain className="w-2.5 h-2.5" /> AI Match</>
+            ) : (
+              <><BookOpen className="w-2.5 h-2.5" /> Google</>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -313,9 +340,14 @@ export default function SemanticSearchPage() {
             {!loading && (
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
-                  {searchType === "semantic" ? (
+                  {isSemanticSearchType(searchType) ? (
                     <Badge className="bg-violet-500/20 text-violet-300 border-violet-500/30 gap-1.5">
-                      <Brain className="w-3 h-3" /> Semantic Match
+                      <Brain className="w-3 h-3" />{" "}
+                      {searchType === "semantic_pinecone" ? "Semantic (vector index)" : "Semantic Match"}
+                    </Badge>
+                  ) : searchType === "blended" ? (
+                    <Badge className="bg-gradient-to-r from-violet-500/20 to-blue-500/20 text-violet-300 border-violet-500/30 gap-1.5">
+                      <Sparkles className="w-3 h-3" /> Blended (AI + Google)
                     </Badge>
                   ) : searchType === "google_books" ? (
                     <Badge className="bg-blue-500/20 text-blue-300 border-blue-500/30 gap-1.5">

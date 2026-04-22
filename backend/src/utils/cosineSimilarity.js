@@ -17,7 +17,7 @@ const cosineSimilarity = (vecA, vecB) => {
   if (vecA.length !== vecB.length) {
     // Align to the shorter vector's length (defensive)
     const minLen = Math.min(vecA.length, vecB.length);
-    vecA = vecA.slice(0, minLen);
+    vecA = vecA.slice(0, minLen); 
     vecB = vecB.slice(0, minLen);
   }
 

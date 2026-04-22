@@ -48,7 +48,12 @@ const api = async (path, { params, ...options } = {}) => {
   }
 
   if (!response.ok) {
-    const error = new Error(data.message || `Request failed: ${response.status}`);
+    let msg = data.message || `Request failed: ${response.status}`;
+    if (Array.isArray(data.errors) && data.errors.length > 0) {
+      const parts = data.errors.map((e) => e.message || e.msg || e).filter(Boolean);
+      if (parts.length) msg = parts.join(". ");
+    }
+    const error = new Error(msg);
     error.status = response.status;
     throw error;
   }

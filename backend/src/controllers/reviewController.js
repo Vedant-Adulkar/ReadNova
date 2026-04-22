@@ -47,3 +47,11 @@ exports.deleteReview = asyncHandler(async (req, res) => {
   );
   res.json({ success: true, message: "Review deleted successfully" });
 });
+
+// @desc   Get internal rating summary for a book
+// @route  GET /api/reviews/:bookId/summary
+// @access Public
+exports.getReviewSummary = asyncHandler(async (req, res) => {
+  const summary = await reviewService.getReviewSummary(req.params.bookId);
+  res.json({ success: true, summary });
+});

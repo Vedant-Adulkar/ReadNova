@@ -15,15 +15,17 @@ const normaliseVolume = (volume) => {
 
   let coverImage = null;
   if (images.thumbnail) {
-    // Bump zoom level for a larger image and force HTTPS
+    // Bump zoom level for a larger image, force HTTPS, strip expiring tokens
     coverImage = images.thumbnail
       .replace(/^http:\/\//i, "https://")
       .replace("zoom=1", "zoom=2")
-      .replace("&edge=curl", ""); // remove curl effect for cleaner display
+      .replace("&edge=curl", "")
+      .replace(/&imgtk=[^&]*/g, ""); // imgtk tokens expire and cause 429s
   } else if (images.smallThumbnail) {
     coverImage = images.smallThumbnail
       .replace(/^http:\/\//i, "https://")
-      .replace("&edge=curl", "");
+      .replace("&edge=curl", "")
+      .replace(/&imgtk=[^&]*/g, "");
   }
 
   // If no imageLinks at all, build the standard Google Books cover URL from the volume ID
@@ -37,9 +39,9 @@ const normaliseVolume = (volume) => {
   if (pages > 400) difficultyLevel = "Advanced";
   else if (pages > 200) difficultyLevel = "Intermediate";
 
-  // Google Books average rating is out of 5
-  const averageRating = info.averageRating ?? 0;
-  const ratingsCount = info.ratingsCount ?? 0;
+  // Use 0 for ratings — our app shows ratings from its own review DB, not Google's
+  const averageRating = 0;
+  const ratingsCount = 0;
 
   return {
     // Use googleBooksId as a stable pseudo-id so BookCard links work

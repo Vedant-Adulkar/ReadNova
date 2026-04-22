@@ -5,8 +5,8 @@
  * In production the stack trace is hidden; in development it is included.
  */
 const errorHandler = (err, req, res, next) => {
-  // Use the status already set on the response (if any), else default to 500
-  let statusCode = res.statusCode && res.statusCode !== 200 ? res.statusCode : 500;
+  // Use err.statusCode (set by services), then res.statusCode, else default to 500
+  let statusCode = err.statusCode || (res.statusCode && res.statusCode !== 200 ? res.statusCode : 500);
   let message = err.message || "Internal Server Error";
 
   // ── Mongoose: invalid ObjectId ─────────────────────────

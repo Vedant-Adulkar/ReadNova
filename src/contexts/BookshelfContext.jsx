@@ -4,34 +4,44 @@
  * Manages the user's bookshelf by calling the real backend API.
  * All state updates are optimistic: the UI updates immediately, then
  * the API call completes in the background.
+ *
+ * Shelf data is loaded with React Query (key: bookshelf + user id) so the UI
+ * stays in sync after auth/profile changes, mutations, and window refocus.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { createContext, useContext, useCallback, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { get, post, put, del } from "@/lib/apiClient";
 import { useAuth } from "@/contexts/AuthContext";
 
 const BookshelfContext = createContext(undefined);
 
+const EMPTY_BOOKSHELF = { wantToRead: [], reading: [], completed: [] };
+
 // Map frontend shelf names → API shelf names
 const SHELF_MAP = { want: "wantToRead", reading: "reading", completed: "completed" };
-const SHELF_MAP_REVERSE = { wantToRead: "want", reading: "reading", completed: "completed" };
 
 export function BookshelfProvider({ children }) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const userId = user?._id != null ? String(user._id) : null;
 
-  // bookshelf shape: { wantToRead: [{book, addedAt}], reading: [...], completed: [...] }
-  const [bookshelf, setBookshelf] = useState({ wantToRead: [], reading: [], completed: [] });
-  const [loadingShelf, setLoadingShelf] = useState(false);
+  const bookshelfQueryKey = useMemo(() => ["bookshelf", userId], [userId]);
 
-  // ── Fetch shelf from API whenever user changes ─────────────────────────────
-  useEffect(() => {
-    if (!user) { setBookshelf({ wantToRead: [], reading: [], completed: [] }); return; }
-    setLoadingShelf(true);
-    get("/bookshelf")
-      .then((data) => setBookshelf(data.bookshelf))
-      .catch(console.error)
-      .finally(() => setLoadingShelf(false));
-  }, [user]);
+  const {
+    data: bookshelf = EMPTY_BOOKSHELF,
+    isLoading: loadingShelf,
+    refetch: refreshBookshelf,
+  } = useQuery({
+    queryKey: bookshelfQueryKey,
+    queryFn: async () => {
+      const data = await get("/bookshelf");
+      return data.bookshelf ?? EMPTY_BOOKSHELF;
+    },
+    enabled: !!userId,
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+  });
 
   // ── getStatus — returns 'want' | 'reading' | 'completed' | null ───────────
   const getStatus = useCallback((bookId) => {
@@ -74,14 +84,16 @@ export function BookshelfProvider({ children }) {
         // Move between shelves
         await put(`/bookshelf/${bookId}/move`, { from: currentApiShelf, to: apiShelf });
       }
-      // Refresh shelf from server
+      // Refresh cache from server (same source of truth as GET /bookshelf)
       const data = await get("/bookshelf");
-      setBookshelf(data.bookshelf);
+      if (userId) {
+        queryClient.setQueryData(["bookshelf", userId], data.bookshelf ?? EMPTY_BOOKSHELF);
+      }
     } catch (err) {
       console.error("Bookshelf update failed:", err.message);
       throw err;
     }
-  }, [getStatus]);
+  }, [getStatus, queryClient, userId]);
 
   // ── entries — flat array matching old BookshelfContext shape ──────────────
   const entries = [
@@ -92,7 +104,9 @@ export function BookshelfProvider({ children }) {
 
 
   return (
-    <BookshelfContext.Provider value={{ bookshelf, entries, loadingShelf, getStatus, setBookStatus }}>
+    <BookshelfContext.Provider
+      value={{ bookshelf, entries, loadingShelf, getStatus, setBookStatus, refreshBookshelf }}
+    >
       {children}
     </BookshelfContext.Provider>
   );

@@ -34,8 +34,8 @@ const resolveBookId = async (bookId) => {
     genres: googleBook.genres,
     description: googleBook.description,
     coverImage: googleBook.coverImage,
-    averageRating: googleBook.averageRating,
-    ratingsCount: googleBook.ratingsCount,
+    averageRating: 0, // Isolate internal-only ratings
+    ratingsCount: 0,  // Isolate internal-only counts
     difficultyLevel: googleBook.difficultyLevel || "Beginner",
     pageCount: googleBook.pageCount,
     publishedDate: googleBook.publishedDate,

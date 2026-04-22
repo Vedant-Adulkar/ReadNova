@@ -49,6 +49,7 @@ router.get("/google-volume/:volumeId", googleBooksController.getGoogleBookById);
 // ── Single book & AI features ─────────────────────────────
 router.get("/:id", bookController.getBookById);
 router.get("/:id/summary", geminiLimiter, bookController.getAISummary);
+router.post("/:id/generate-summary", protect, geminiLimiter, bookController.generateSummary);
 router.get("/:id/review-summary", geminiLimiter, bookController.getReviewSummary);
 
 // ── Admin routes ───────────────────────────────────────────

@@ -18,6 +18,23 @@ const MOOD_QUERY = {
   Intense: "thriller dark intense",
 };
 
+// ── Session cache helpers (reuse across re-renders) ──────────────────────
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+const getCache = (key) => {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    if (Date.now() - ts > CACHE_TTL) { sessionStorage.removeItem(key); return null; }
+    return data;
+  } catch { return null; }
+};
+
+const setCache = (key, data) => {
+  try { sessionStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })); } catch { /* quota */ }
+};
+
 export default function Dashboard() {
   const { user } = useAuth();
   const [selectedMood, setSelectedMood] = useState(null);
@@ -29,14 +46,34 @@ export default function Dashboard() {
   const [trending, setTrending] = useState([]);
   const [loadingRecs, setLoadingRecs] = useState(false);
   const [loadingSearch, setLoadingSearch] = useState(false);
-
   const [loadingTrending, setLoadingTrending] = useState(false);
 
-  // ── Trending Now = Google Books popular new releases ───────────────────────
+  // ── Helper: fetch from Google Books, fall back to local DB ─────────────────
+  const fetchWithFallback = async (googleQuery, localParams = {}, limit = 20) => {
+    try {
+      const data = await get("/books/google-search", { q: googleQuery, limit });
+      if (data.books && data.books.length > 0) return data.books;
+    } catch (err) {
+      console.warn("Google Books unavailable, falling back to local DB:", err.message);
+    }
+    // Fallback: pull from local database
+    try {
+      const data = await get("/books", { limit, ...localParams });
+      return data.books || [];
+    } catch { return []; }
+  };
+
+  // ── Trending Now = Google Books popular releases → local DB fallback ───────
   useEffect(() => {
+    const cached = getCache("dash_trending");
+    if (cached && cached.length > 0) { setTrending(cached); return; }
+
     setLoadingTrending(true);
-    get("/books/google-search", { q: "popular fiction bestsellers 2024", limit: 12 })
-      .then((data) => setTrending(data.books || []))
+    fetchWithFallback("popular fiction bestsellers 2024", { sort: "-createdAt" }, 20)
+      .then((books) => {
+        if (books.length > 0) setCache("dash_trending", books);
+        setTrending(books);
+      })
       .catch(console.error)
       .finally(() => setLoadingTrending(false));
   }, []);
@@ -44,36 +81,64 @@ export default function Dashboard() {
   // ── For You = personalised from quiz preferences ─────────────────────────
   useEffect(() => {
     if (!user) return;
+
+    const profile = user.personalityProfile || "";
+    const cacheKey = `dash_foryou_${profile.slice(0, 60)}`;
+
+    // Use cached results if available
+    const cached = getCache(cacheKey);
+    if (cached && cached.length > 0) { setRecommendations(cached); return; }
+
     setLoadingRecs(true);
 
-    // Build a targeted query from the user's saved personalityProfile
-    const profile = user.personalityProfile || "";
-    let q = "must read award winning books";
-
-    if (profile) {
-      // Extract genres: "Genres: Fiction, Sci-Fi."
-      const genreMatch = profile.match(/Genres:\s*([^.]+)/);
-      const genres = genreMatch
-        ? genreMatch[1].split(",").map((g) => g.trim()).filter(Boolean)
-        : [];
-
-      // Extract difficulty: "Difficulty: Beginner — Easy, light reads."
-      const diffMatch = profile.match(/Difficulty:\s*([^.]+)/);
-      const difficulty = diffMatch ? diffMatch[1].trim() : "";
-
-      // Build query: top 3 genres + difficulty hint
-      const topGenres = genres.slice(0, 3).join(" ");
-      const diffHint = difficulty.startsWith("Beginner")
-        ? "beginner easy introductory"
-        : difficulty.startsWith("Advanced")
-          ? "advanced comprehensive"
-          : "";
-
-      q = [topGenres, diffHint, "books"].filter(Boolean).join(" ").trim() || q;
+    if (!profile) {
+      fetchWithFallback("must read award winning books", { sort: "-averageRating" }, 20)
+        .then((books) => {
+          if (books.length > 0) setCache(cacheKey, books);
+          setRecommendations(books);
+        })
+        .catch(console.error)
+        .finally(() => setLoadingRecs(false));
+      return;
     }
 
-    get("/books/google-search", { q, limit: 12 })
-      .then((data) => setRecommendations(data.books || []))
+    // Extract genres: "Genres: Fiction, Sci-Fi, Fantasy."
+    const genreMatch = profile.match(/Genres:\s*([^.]+)/);
+    const genres = genreMatch
+      ? genreMatch[1].split(",").map((g) => g.trim()).filter(Boolean)
+      : [];
+
+    if (genres.length === 0) {
+      fetchWithFallback("must read award winning books", { sort: "-averageRating" }, 20)
+        .then((books) => {
+          if (books.length > 0) setCache(cacheKey, books);
+          setRecommendations(books);
+        })
+        .catch(console.error)
+        .finally(() => setLoadingRecs(false));
+      return;
+    }
+
+    // Fetch per-genre: try Google Books first, fall back to local text search
+    const perGenre = Math.max(8, Math.ceil(24 / genres.length));
+    const fetches = genres.map((genre) =>
+      fetchWithFallback(`subject:${genre}`, { q: genre, limit: perGenre }, perGenre)
+    );
+
+    Promise.all(fetches)
+      .then((results) => {
+        // Merge and deduplicate by ID
+        const seen = new Set();
+        const merged = results.flat().filter((b) => {
+          const key = b._id || b.googleBooksId || b.id;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        const final = merged.slice(0, 24);
+        if (final.length > 0) setCache(cacheKey, final);
+        setRecommendations(final);
+      })
       .catch(console.error)
       .finally(() => setLoadingRecs(false));
   }, [user?.personalityProfile]);
@@ -186,7 +251,7 @@ export default function Dashboard() {
           const profile = user?.personalityProfile || "";
           const genreMatch = profile.match(/Genres:\s*([^.]+)/);
           const topGenres = genreMatch
-            ? genreMatch[1].split(",").slice(0, 2).map((g) => g.trim()).join(" & ")
+            ? genreMatch[1].split(",").map((g) => g.trim()).filter(Boolean).join(", ")
             : null;
 
           const forYouTitle = selectedMood
@@ -204,12 +269,12 @@ export default function Dashboard() {
               <Section title={forYouTitle} subtitle={forYouSubtitle}>
                 {loadingRecs
                   ? <Loader2 className="animate-spin h-6 w-6 text-primary" />
-                  : <BookGrid books={recommendations.map(normaliseBook)} showExplanation />}
+                  : <BookGrid books={recommendations.slice(0, 18).map(normaliseBook)} showExplanation />}
               </Section>
               <Section title="Trending Now">
                 {loadingTrending
                   ? <Loader2 className="animate-spin h-6 w-6 text-primary" />
-                  : <BookGrid books={trending.map(normaliseBook)} />}
+                  : <BookGrid books={trending.slice(0, 18).map(normaliseBook)} />}
               </Section>
             </>
           );

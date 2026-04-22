@@ -9,15 +9,18 @@
  *  - register()  : call /api/auth/register, store token, set user
  *  - logout()    : clear token + user state
  *  - updateUser(): merge updates into user state (e.g. after preference quiz)
+ *  - refreshUser(): refetch current user from GET /auth/me
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { post, get } from "@/lib/apiClient";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(() => localStorage.getItem("token"));
   const [loading, setLoading] = useState(true);
@@ -72,6 +75,16 @@ export function AuthProvider({ children }) {
   const logout = useCallback(() => {
     setToken(null);
     setUser(null);
+    queryClient.removeQueries({ queryKey: ["bookshelf"] });
+  }, [queryClient]);
+
+  // ── refreshUser — merge server state (e.g. after external profile changes) ──
+  const refreshUser = useCallback(async () => {
+    const storedToken = localStorage.getItem("token");
+    if (!storedToken) return null;
+    const data = await get("/auth/me");
+    setUser(data.user);
+    return data.user;
   }, []);
 
   // ── updateUser (shallow merge) ─────────────────────────────────────────────
@@ -86,7 +99,9 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout, updateUser, updateProfilePicture }}>
+    <AuthContext.Provider
+      value={{ user, token, loading, login, register, logout, refreshUser, updateUser, updateProfilePicture }}
+    >
       {children}
     </AuthContext.Provider>
   );

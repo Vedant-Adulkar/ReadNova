@@ -93,9 +93,15 @@ async function run() {
       })
     );
 
-    // Upsert the whole batch to Pinecone at once
+    // Upsert the whole batch to Pinecone at once (SDK v7: pass { records: [...] })
     if (pineconeBatch.length > 0) {
-      await index.upsert(pineconeBatch);
+      console.log(`  📍 Upserting ${pineconeBatch.length} vectors (dim=${pineconeBatch[0]?.values?.length}) to Pinecone...`);
+      try {
+        await index.upsert({ records: pineconeBatch });
+        console.log(`  ✅ Upserted ${pineconeBatch.length} vectors to Pinecone.`);
+      } catch (err) {
+        console.error(`  ⚠️  Pinecone upsert failed: ${err.message}`);
+      }
     }
 
     // Rate-limit Gemini embedding calls

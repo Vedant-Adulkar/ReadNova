@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BookCard } from "@/components/BookCard";
 import { useBookshelf } from "@/contexts/BookshelfContext";
-import { BookOpen, Library, CheckCircle, Loader2, Sparkles } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { BookOpen, Library, CheckCircle, Loader2, Sparkles, User } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +34,7 @@ function normBook(entry) {
 }
 
 export default function Bookshelf() {
+  const { user } = useAuth();
   const { entries, loadingShelf } = useBookshelf();
   const [sortBy, setSortBy] = useState("dateAdded");
 
@@ -70,7 +72,24 @@ export default function Bookshelf() {
       <div className="space-y-10 max-w-7xl mx-auto">
         <div className="space-y-2">
           <Badge variant="outline" className="bg-primary/5 text-primary">Library</Badge>
-          <h1 className="text-3xl md:text-4xl font-bold font-serif text-foreground">My Virtual Bookshelf</h1>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <h1 className="text-3xl md:text-4xl font-bold font-serif text-foreground">My Virtual Bookshelf</h1>
+            {user && (
+              <div className="flex items-center gap-3 text-left">
+                <div className="h-12 w-12 rounded-full bg-primary/15 flex items-center justify-center overflow-hidden ring-2 ring-primary/20 shrink-0">
+                  {user.profilePicture ? (
+                    <img src={user.profilePicture} alt={user.name ?? "Profile"} className="h-full w-full object-cover" />
+                  ) : (
+                    <User className="h-6 w-6 text-primary" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground truncate">{user.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Stats Section */}

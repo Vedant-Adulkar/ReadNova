@@ -62,9 +62,57 @@ const addToShelf = async (userId, bookId) => {
   return user.bookshelf;
 };
 
+// ── Preference embedding helpers ──────────────────────────────────────────────
+
+/**
+ * recomputePreferenceEmbedding
+ *
+ * After a book is added to the completed shelf, recompute the user's
+ * preferenceEmbedding as the element-wise average of all completed books'
+ * embedding vectors. This ensures content-based recommendations evolve
+ * with every book the user finishes.
+ *
+ * @param {object} user  - Full Mongoose user document (not yet saved)
+ */
+const recomputePreferenceEmbedding = async (user) => {
+  try {
+    // Populate completed books to get their embeddings
+    const completedBookIds = user.bookshelf.completed.map((e) => e.book);
+    if (completedBookIds.length === 0) return;
+
+    const completedBooks = await Book.find(
+      { _id: { $in: completedBookIds }, embedding: { $exists: true, $not: { $size: 0 } } },
+      { embedding: 1 }
+    ).lean();
+
+    const validEmbeddings = completedBooks
+      .map((b) => b.embedding)
+      .filter((e) => Array.isArray(e) && e.length > 0);
+
+    if (validEmbeddings.length === 0) return;
+
+    // Element-wise average across all completed book embeddings
+    const dim = validEmbeddings[0].length;
+    const avg = new Array(dim).fill(0);
+
+    for (const emb of validEmbeddings) {
+      for (let i = 0; i < dim; i++) {
+        avg[i] += emb[i] / validEmbeddings.length;
+      }
+    }
+
+    user.preferenceEmbedding = avg;
+    console.log(`✅ preferenceEmbedding updated for user ${user._id} (${validEmbeddings.length} completed books averaged)`);
+  } catch (err) {
+    // Non-fatal — don't block the shelf move if embedding update fails
+    console.error("⚠️  Failed to recompute preferenceEmbedding:", err.message);
+  }
+};
+
 /**
  * moveShelf — move a book between shelves following allowed transitions.
  * wantToRead → reading → completed
+ * Auto-recomputes preferenceEmbedding when destination is 'completed'.
  *
  * @param {string} userId
  * @param {string} bookId
@@ -89,18 +137,36 @@ const moveShelf = async (userId, bookId, fromShelf, toShelf) => {
   const user = await User.findById(userId);
   const bookIdStr = bookId.toString();
 
-  // Confirm the book is actually on the fromShelf
-  const idx = user.bookshelf[fromShelf].findIndex(
+  // Try to find the book on the claimed fromShelf
+  let idx = user.bookshelf[fromShelf].findIndex(
     (e) => e.book.toString() === bookIdStr
   );
+  let actualFromShelf = fromShelf;
+
+  // If not found on the claimed shelf, search all shelves (handles stale UI state)
   if (idx === -1) {
-    const error = new Error(`Book not found on your '${fromShelf}' shelf`);
+    for (const shelf of VALID_SHELVES) {
+      if (shelf === fromShelf) continue;
+      const foundIdx = user.bookshelf[shelf].findIndex(
+        (e) => e.book.toString() === bookIdStr
+      );
+      if (foundIdx !== -1) {
+        actualFromShelf = shelf;
+        idx = foundIdx;
+        console.log(`ℹ️  Book found on '${actualFromShelf}' instead of claimed '${fromShelf}' — correcting.`);
+        break;
+      }
+    }
+  }
+
+  if (idx === -1) {
+    const error = new Error("Book not found on any shelf");
     error.statusCode = 404;
     throw error;
   }
 
-  // Remove from source shelf
-  user.bookshelf[fromShelf].splice(idx, 1);
+  // Remove from actual source shelf
+  user.bookshelf[actualFromShelf].splice(idx, 1);
 
   // Add to destination shelf (avoid duplicate just in case)
   const alreadyOnTarget = user.bookshelf[toShelf].some(
@@ -108,6 +174,11 @@ const moveShelf = async (userId, bookId, fromShelf, toShelf) => {
   );
   if (!alreadyOnTarget) {
     user.bookshelf[toShelf].push({ book: bookId });
+  }
+
+  // ── Auto-update preference embedding when a book is completed ────────────
+  if (toShelf === "completed") {
+    await recomputePreferenceEmbedding(user);
   }
 
   await user.save();

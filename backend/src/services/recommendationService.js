@@ -105,17 +105,58 @@ const getRecommendations = async (user, options = {}) => {
   if (allBooks.length === 0) return [];
 
   // ── 5. Run hybrid engine ──────────────────────────────────────────────────
-  // Pass empty filters to engine since DB already pre-filtered by genre
+  // Ask for more than topN so we still have enough after filtering reference books
   const engineFilters = { difficulty: filters.difficulty, keywords: filters.keywords };
-  const rawResults = await getHybridRecommendations(user, allBooks, topN, engineFilters);
+  const rawResults = await getHybridRecommendations(user, allBooks, topN * 3, engineFilters);
+
+  // ── 5b. Filter out reference / academic / guide books ────────────────────
+  const REFERENCE_TITLE_SIGNALS = [
+    'guide', 'handbook', 'companion to', 'introduction', 'encyclopedia',
+    'dictionary', 'manual', 'textbook', 'yearbook', 'bibliography',
+    'catalogue', 'catalog', 'index', 'digest', 'almanac', 'atlas',
+    'proceedings', 'bulletin', 'annals', 'transactions', 'review of',
+    'studies', "who's who", 'exploration of', 'reference',
+    // Academic/science signals
+    'pseudoscience', 'frontiers', 'analog science', 'new scientist',
+    'humboldt library', 'speculative influence', 'science fiction and',
+    'science fiction in', 'past and future', 'reader\'s',
+  ];
+  const REFERENCE_GENRES = [
+    'literary criticism', 'reference', 'bibliography', 'performing arts',
+    'social science', 'education', 'philosophy', 'technology', 'computers',
+    'language study', 'juvenile nonfiction',
+    // Added: science non-fiction
+    'science', 'astronomy', 'nature', 'periodicals', 'serial publications',
+    'history', 'political science', 'medical', 'health', 'psychology',
+    'religion', 'mathematics', 'self-help', 'business',
+  ];
+
+  const filtered = rawResults.filter(({ book }) => {
+    const title = (book.title || '').toLowerCase();
+    const genres = (book.genres || []).map(g => g.toLowerCase());
+
+    // Reject obvious reference books by title
+    if (REFERENCE_TITLE_SIGNALS.some(sig => title.includes(sig))) return false;
+
+    // Reject books whose primary genre is reference/non-fiction
+    if (genres.some(g => {
+      const primary = g.split('/')[0].trim();
+      return REFERENCE_GENRES.some(rg => primary.includes(rg));
+    })) return false;
+
+    return true;
+  });
+
+  // Use filtered results; fall back to unfiltered if everything got stripped
+  const finalResults = (filtered.length >= Math.min(3, topN) ? filtered : rawResults).slice(0, topN);
 
   // ── 6. Cache mood results (5 min TTL) ─────────────────────────────────────
   if (input?.mood) {
     const cacheKey = `mood:${input.mood}:user:${user._id}`;
-    setCache(cacheKey, rawResults);
+    setCache(cacheKey, finalResults);
   }
 
-  return rawResults;
+  return finalResults;
 };
 
 /**

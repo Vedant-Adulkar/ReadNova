@@ -44,12 +44,22 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (e.g. Postman, curl) in development
-      if (!origin || process.env.NODE_ENV === "development") return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
-      callback(new Error(`CORS: origin '${origin}' not allowed`));
+      // Allow requests with no origin (e.g. Postman, curl, or same-origin)
+      if (!origin) return callback(null, true);
+
+      // In development, allow everything
+      if (process.env.NODE_ENV === "development") return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      } else {
+        console.warn(`CORS blocked for origin: ${origin}`);
+        return callback(new Error(`CORS: origin '${origin}' not allowed`));
+      }
     },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 

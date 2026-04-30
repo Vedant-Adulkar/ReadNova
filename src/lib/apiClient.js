@@ -9,7 +9,30 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+let rawBaseUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
+// Remove trailing slash if present
+if (rawBaseUrl.endsWith("/")) {
+  rawBaseUrl = rawBaseUrl.slice(0, -1);
+}
+
+// Ensure it ends with /api if it doesn't already
+// This handles cases where VITE_API_URL is just the domain
+if (!rawBaseUrl.endsWith("/api")) {
+  rawBaseUrl = `${rawBaseUrl}/api`;
+}
+
+// Guard: must have a protocol — catches missing https:// in Vercel env vars
+if (!rawBaseUrl.startsWith("http://") && !rawBaseUrl.startsWith("https://")) {
+  console.error(
+    `[apiClient] VITE_API_URL is missing a protocol (http:// or https://).\n` +
+    `Current value: "${rawBaseUrl}"\n` +
+    `Fix: set VITE_API_URL=https://readnova-7c5h.onrender.com/api in Vercel environment variables.`
+  );
+  rawBaseUrl = `https://${rawBaseUrl}`;
+}
+
+const BASE_URL = rawBaseUrl;
 
 /**
  * api(path, options) — thin wrapper around fetch.

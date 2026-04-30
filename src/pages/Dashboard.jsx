@@ -1,11 +1,14 @@
 import { useState, useEffect } from "react";
-import { Sparkles, Loader2 } from "lucide-react";
+import { Brain, Sparkles, Loader2 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { BookCard } from "@/components/BookCard";
 import { AppLayout } from "@/components/AppLayout";
 import { get } from "@/lib/apiClient";
 import { useAuth } from "@/contexts/AuthContext";
+import { useBookshelf } from "@/contexts/BookshelfContext";
 
 const moods = ["Happy", "Thoughtful", "Adventurous", "Relaxing", "Intense"];
 
@@ -37,6 +40,7 @@ const setCache = (key, data) => {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { getStatus } = useBookshelf();
   const [selectedMood, setSelectedMood] = useState(null);
   const [query, setQuery] = useState("");
   const [aiResponse, setAiResponse] = useState("");
@@ -62,6 +66,7 @@ export default function Dashboard() {
       return data.books || [];
     } catch { return []; }
   };
+
 
   // ── Trending Now = Google Books popular releases → local DB fallback ───────
   useEffect(() => {
@@ -271,11 +276,41 @@ export default function Dashboard() {
                   ? <Loader2 className="animate-spin h-6 w-6 text-primary" />
                   : <BookGrid books={recommendations.slice(0, 18).map(normaliseBook)} showExplanation />}
               </Section>
+
               <Section title="Trending Now">
                 {loadingTrending
                   ? <Loader2 className="animate-spin h-6 w-6 text-primary" />
                   : <BookGrid books={trending.slice(0, 18).map(normaliseBook)} />}
               </Section>
+
+              {/* AI Picks CTA — links to the dedicated Recommendations page */}
+              <section className="space-y-4">
+                <div className="space-y-1">
+                  <h2 className="text-2xl md:text-3xl font-bold font-serif tracking-tight text-foreground">
+                    <Brain className="inline-block h-5 w-5 mr-2 text-primary" />
+                    AI Picks For You
+                  </h2>
+                  <p className="text-muted-foreground text-sm font-medium">
+                    Personalised by our hybrid engine using your taste profile
+                  </p>
+                </div>
+                <div className="flex items-center justify-between rounded-2xl border border-primary/20 bg-primary/5 p-5 gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-xl bg-primary/10 shrink-0">
+                      <Sparkles className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm">Your personalised reading list is ready</p>
+                      <p className="text-muted-foreground text-xs mt-0.5">
+                        Match scores, mood filters &amp; conversational search — all in one place.
+                      </p>
+                    </div>
+                  </div>
+                  <Button asChild size="sm" className="shrink-0">
+                    <Link to="/recommendations">View AI Picks →</Link>
+                  </Button>
+                </div>
+              </section>
             </>
           );
         })()}
@@ -284,11 +319,13 @@ export default function Dashboard() {
   );
 }
 
-function Section({ title, subtitle, children }) {
+function Section({ title, subtitle, icon, children }) {
   return (
     <section className="space-y-6">
       <div className="space-y-1">
-        <h2 className="text-2xl md:text-3xl font-bold font-serif tracking-tight text-foreground">{title}</h2>
+        <h2 className="text-2xl md:text-3xl font-bold font-serif tracking-tight text-foreground">
+          {icon}{title}
+        </h2>
         {subtitle && <p className="text-muted-foreground text-sm font-medium">{subtitle}</p>}
       </div>
       {children}

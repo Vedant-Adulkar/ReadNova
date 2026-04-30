@@ -18,6 +18,7 @@ import SearchPage from "./pages/SearchPage";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 import SemanticSearchPage from "./pages/SemanticSearchPage";
+import Recommendations from "./pages/Recommendations";
 
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { PublicRoute } from "./components/PublicRoute";
@@ -48,6 +49,7 @@ const App = () => (
                 <Route path="/goals" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
                 <Route path="/search" element={<ProtectedRoute><SearchPage /></ProtectedRoute>} />
                 <Route path="/semantic-search" element={<ProtectedRoute><SemanticSearchPage /></ProtectedRoute>} />
+                <Route path="/recommendations" element={<ProtectedRoute><Recommendations /></ProtectedRoute>} />
                 <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
 
                 <Route path="*" element={<NotFound />} />

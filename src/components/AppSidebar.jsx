@@ -1,10 +1,11 @@
-import { BookOpen, Library, Target, User, LayoutDashboard, Search, Brain, X } from "lucide-react";
+import { BookOpen, Library, Target, User, LayoutDashboard, Search, Brain, Sparkles, X } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+  { title: "AI Picks", url: "/recommendations", icon: Sparkles },
   { title: "Bookshelf", url: "/bookshelf", icon: Library },
   { title: "Goals", url: "/goals", icon: Target },
   { title: "Search", url: "/search", icon: Search },

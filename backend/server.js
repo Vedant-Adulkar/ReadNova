@@ -35,11 +35,22 @@ const app = express();
 // ── Security middleware ───────────────────────────────────────────────────────
 app.use(helmet()); // Sets secure HTTP headers
 
-// CORS — allow origins from env (supports multiple comma-separated values)
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
-  .split(",")
-  .map((o) => o.trim())
-  .filter(Boolean);
+// CORS — allow origins from env (supports exact strings and regex patterns)
+// Regex patterns in ALLOWED_ORIGINS should be prefixed with "regex:"
+// e.g. regex:^https://read-nova.*\.vercel\.app$
+const rawOrigins = (process.env.ALLOWED_ORIGINS || "").split(",").map((o) => o.trim()).filter(Boolean);
+
+const allowedOrigins = rawOrigins.map((o) => {
+  if (o.startsWith("regex:")) {
+    return new RegExp(o.slice("regex:".length));
+  }
+  return o;
+});
+
+const isOriginAllowed = (origin) =>
+  allowedOrigins.some((o) =>
+    o instanceof RegExp ? o.test(origin) : o === origin
+  );
 
 app.use(
   cors({
@@ -50,7 +61,7 @@ app.use(
       // In development, allow everything
       if (process.env.NODE_ENV === "development") return callback(null, true);
 
-      if (allowedOrigins.includes(origin)) {
+      if (isOriginAllowed(origin)) {
         return callback(null, true);
       } else {
         console.warn(`CORS blocked for origin: ${origin}`);
